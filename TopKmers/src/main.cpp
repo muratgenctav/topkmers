@@ -23,7 +23,7 @@ using namespace std;
 #define MAX_K 30						// max value for k
 #define MAX_TOPCOUNT 25					// max value for topcount
 #define MAX_NTHREADS 4					// max value for the number of threads
-#define MAX_MAP_SIZE 6000000			// max size for the hashmap
+#define MAX_MAP_SIZE 10000000			// max size for the hashmap
 #define OPT_HELP "--help"				// option help
 #define OPT_INPUT "--input"				// option input
 #define OPT_KMERLENGTH "--kmerlength"	// option k-mer length
