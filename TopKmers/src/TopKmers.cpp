@@ -11,6 +11,7 @@
 #include <cmath>
 #include <queue>
 #include <thread>
+#include <limits>
 #include "SeqFileScanner.h"
 
 // Constructor method
@@ -73,7 +74,7 @@ void TopKmers::computeTopKmers(vector<pair<string,unsigned int>> &mostFrequentKm
     mostFreqKmers(mostFrequentKmers,countmap);
 }
 
-// Utility function to encode k-mer as an integer
+// Utility functions to encode/decode k-mers
 kmer_key_t seq2key(const string &seq) {
 	kmer_key_t idx;
 	switch(seq[0]) {
@@ -131,6 +132,10 @@ void TopKmers::processSeq(const string &seq, unordered_map<kmer_key_t,unsigned i
 	for(unsigned int i = 0; i <= endSeq; i++) {
         string kmer = seq.substr(i,k);
         kmer_key_t key = seq2key(kmer);
+        if(key == numeric_limits<unsigned long long>::max()) {
+        	// sequence has invalid chars (possibly 'N')
+        	continue;
+        }
         if(nThreads > 1) {
 			if(key < startIdx || key >= endIdx) {
 				// k-mer is not within the partition of the thread
