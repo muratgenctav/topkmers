@@ -18,12 +18,19 @@
 TopKmers::TopKmers(string _fileName, int _k, int _nTopKmers, int _nThreads, unsigned int _maxMapSize)
 : fileName(_fileName), k(_k), nTopKmers(_nTopKmers), nThreads(_nThreads) {
 	maxMapSize = _maxMapSize/_nThreads;
+	// Initialize hash-key mask
+	keyMask = 3;
+	for(int i = 1; i < _k; i++) {
+		keyMask *= 4;
+		keyMask += 3;
+	}
 }
 
 // Public method that extracts (only at first call) and returns top k-mers as (k-mer,frequency) pairs
 const vector<pair<string,unsigned int>> & TopKmers::getTopKmers() {
 	if(topKmers.empty()) {
-		// Compute top k-mers first
+		// Compute top k-mers
+		// Run counter threads
 		if(nThreads == 1) {
 			// one thread
 			computeTopKmers(topKmers);
@@ -63,7 +70,7 @@ void TopKmers::computeTopKmers(vector<pair<string,unsigned int>> &mostFrequentKm
     if(nThreads > 1) {
         startKmerIdx = threadID*rangePerThread;
         if(threadID < nThreads-1) {
-            endKmerIdx = startKmerIdx+rangePerThread;
+            endKmerIdx = startKmerIdx+rangePerThread-1;
         }
     }
     while(scanner.readNextSequence(seq)) {
@@ -74,24 +81,56 @@ void TopKmers::computeTopKmers(vector<pair<string,unsigned int>> &mostFrequentKm
     mostFreqKmers(mostFrequentKmers,countmap);
 }
 
-// Utility functions to encode/decode k-mers
-kmer_key_t seq2key(const string &seq) {
-	kmer_key_t idx;
-	switch(seq[0]) {
-	case 'A':
-		idx = 0; break;
-	case 'T':
-		idx = 1; break;
-	case 'G':
-		idx = 2; break;
-	case 'C':
-		idx = 3; break;
-	default:
-		return numeric_limits<unsigned long long>::max(); // err idx
-	}
-	for(size_t i = 1; i < seq.length(); i++ ){
+// Helper method to process a sequence
+void TopKmers::processSeq(const string &seq, unordered_map<kmer_key_t,unsigned int> &count, const kmer_key_t startIdx, const kmer_key_t endIdx) {
+    unsigned int endSeq = seq.length();
+    unsigned int pos = 0;
+    kmer_key_t idx;
+    // calculate first hash-key
+    switch(seq[0]) {
+    case 'A':
+    	idx = 0; break;
+    case 'T':
+    	idx = 1; break;
+    case 'G':
+    	idx = 2; break;
+    case 'C':
+    	idx = 3; break;
+    default:
+    	idx = 0;  // possibly N
+    }
+    pos = 1;
+    while(pos < (unsigned int) k) {
+    	idx *= 4;
+    	switch(seq[pos]) {
+    	case 'A':
+    		idx += 0; break;
+    	case 'T':
+    		idx += 1; break;
+    	case 'G':
+    		idx += 2; break;
+    	case 'C':
+    		idx += 3; break;
+    	default:
+    		idx += 0; // possibly N
+    	}
+    	pos++;
+    }
+    // count the first k-mer
+    if((nThreads == 1) || (idx >= startIdx && idx <= endIdx)) {
+    	if((count.size() <= maxMapSize) || (count.find(idx) != count.end())) {
+    		count[idx]++;
+    	}
+    }
+    // process subsequent k-mers
+	for(; pos < endSeq; pos++) {
+		// update key
+		// shift left
 		idx *= 4;
-		switch(seq[i]) {
+		// get rid of the leftmost char
+		idx = idx & keyMask;
+		// update with next char
+		switch(seq[pos]) {
 		case 'A':
 			idx += 0; break;
 		case 'T':
@@ -101,11 +140,26 @@ kmer_key_t seq2key(const string &seq) {
 		case 'C':
 			idx += 3; break;
 		default:
-			return numeric_limits<unsigned long long>::max(); // err idx
+			idx += 0; // possibly N
 		}
-	}
-	return idx;
+        if(nThreads > 1) {
+        	if(idx < startIdx || idx > endIdx) {
+        		// k-mer is not within the partition of the thread
+        		continue;
+        	}
+        }
+        if(count.size() > maxMapSize) {
+            if(count.find(idx) == count.end()) {
+                // k-mer shows up after how long!
+            	// ignore it
+                continue;
+            }
+        }
+        count[idx]++;
+    }
 }
+
+// Utility function to decode key into k-mer
 string key2seq(kmer_key_t idx, int length) {
 	char seq[length+1];
 	for(int i = length-1; i >= 0; i--) {
@@ -126,34 +180,7 @@ string key2seq(kmer_key_t idx, int length) {
 	return string(seq);
 }
 
-// Helper method to process a sequence
-void TopKmers::processSeq(const string &seq, unordered_map<kmer_key_t,unsigned int> &count, const kmer_key_t startIdx, const kmer_key_t endIdx) {
-    unsigned int endSeq = seq.length()-k;
-	for(unsigned int i = 0; i <= endSeq; i++) {
-        string kmer = seq.substr(i,k);
-        kmer_key_t key = seq2key(kmer);
-        if(key == numeric_limits<unsigned long long>::max()) {
-        	// sequence has invalid chars (possibly 'N')
-        	continue;
-        }
-        if(nThreads > 1) {
-			if(key < startIdx || key >= endIdx) {
-				// k-mer is not within the partition of the thread
-				continue;
-			}
-		}
-        if(count.size() > maxMapSize) {
-            if(count.find(key) == count.end()) {
-                // k-mer shows up after how long!
-            	// ignore it
-                continue;
-            }
-        }
-        count[key]++;
-    }
-}
-
-// External utility function object to compare two k-mers w.r.t. their frequency values
+// Utility function object to compare two k-mers w.r.t. their frequency values
 template<class T> struct CompareFreq {
     bool operator()(const pair<T,unsigned int> &n1,const pair<T,unsigned int> &n2) {
         return n1.second > n2.second;

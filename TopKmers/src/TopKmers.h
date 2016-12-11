@@ -84,6 +84,7 @@ private:
 	const int nTopKmers;		// The number of top k-mers expected to be listed
 	const int nThreads;			// Number of threads that counts a partition of the all possible k-mers
 	unsigned int maxMapSize;	// Constraint for the maximum size of the hashmap(s) allowed to use memory efficiently
+	kmer_key_t keyMask;			// Number to be used as a mask for computation of hash-keys
 	vector<pair<string,unsigned int>> topKmers; // List of extracted k-mers stored as (k-mer,frequency) pairs
 };
 
