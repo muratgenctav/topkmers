@@ -14,6 +14,8 @@
 #include <vector>
 #include <unordered_map>
 
+typedef unsigned long long int kmer_key_t;
+
 using namespace std;
 
 class TopKmers {
@@ -58,7 +60,7 @@ private:
 	 * @param-in startIdx: starting index of the k-mer sub-space
 	 * @param-in endIdx: ending index of the k-mer sub-space
 	 */
-	void processSeq(const string &sequence, unordered_map<string,unsigned int> &countMap, const unsigned int startIdx, const unsigned int endIdx);
+	void processSeq(const string &sequence, unordered_map<kmer_key_t,unsigned int> &countMap, const kmer_key_t startIdx, const kmer_key_t endIdx);
 
 	/**
 	 * Helper method to extract most frequent k-mers from a count-map
@@ -66,7 +68,7 @@ private:
 	 * @param-out mostFrequentKmers: Output parameter to return the list of top k-mers
 	 * @param-in countMap: count-map that maps k-mers to their counts
 	 */
-	void mostFreqKmers(vector<pair<string,unsigned int>> &mostFrequentKmers,const unordered_map<string,unsigned int> &countMap);
+	void mostFreqKmers(vector<pair<string,unsigned int>> &mostFrequentKmers,const unordered_map<kmer_key_t,unsigned int> &countMap);
 
 	/**
 	 * Helper method to merge results from multiple threads (called when multi-thread mode)
@@ -81,7 +83,6 @@ private:
 	const int k;				// The length of k-mers to be counted
 	const int nTopKmers;		// The number of top k-mers expected to be listed
 	const int nThreads;			// Number of threads that counts a partition of the all possible k-mers
-	int nSignChars;				// Number of significant characters to partition the space of all possible k-mers
 	unsigned int maxMapSize;	// Constraint for the maximum size of the hashmap(s) allowed to use memory efficiently
 	vector<pair<string,unsigned int>> topKmers; // List of extracted k-mers stored as (k-mer,frequency) pairs
 };
