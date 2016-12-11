@@ -83,9 +83,10 @@ void TopKmers::computeTopKmers(vector<pair<string,unsigned int>> &mostFrequentKm
 
 // Helper method to process a sequence
 void TopKmers::processSeq(const string &seq, unordered_map<kmer_key_t,unsigned int> &count, const kmer_key_t startIdx, const kmer_key_t endIdx) {
-    unsigned int endSeq = seq.length();
-    unsigned int pos = 0;
+    int endSeq = seq.length();
+    int pos = 0;
     kmer_key_t idx;
+    int posN = -1;
     // calculate first hash-key
     switch(seq[0]) {
     case 'A':
@@ -98,9 +99,10 @@ void TopKmers::processSeq(const string &seq, unordered_map<kmer_key_t,unsigned i
     	idx = 3; break;
     default:
     	idx = 0;  // possibly N
+    	posN = 0;
     }
     pos = 1;
-    while(pos < (unsigned int) k) {
+    while(pos < k) {
     	idx *= 4;
     	switch(seq[pos]) {
     	case 'A':
@@ -113,17 +115,22 @@ void TopKmers::processSeq(const string &seq, unordered_map<kmer_key_t,unsigned i
     		idx += 3; break;
     	default:
     		idx += 0; // possibly N
+    		posN = pos;
     	}
     	pos++;
     }
     // count the first k-mer
-    if((nThreads == 1) || (idx >= startIdx && idx <= endIdx)) {
-    	if((count.size() <= maxMapSize) || (count.find(idx) != count.end())) {
-    		count[idx]++;
-    	}
+    if(posN == -1) {
+		if((nThreads == 1) || (idx >= startIdx && idx <= endIdx)) {
+			if((count.size() <= maxMapSize) || (count.find(idx) != count.end())) {
+				count[idx]++;
+			}
+		}
     }
+    int startPos = 0;
     // process subsequent k-mers
 	for(; pos < endSeq; pos++) {
+		startPos++;
 		// update key
 		// shift left
 		idx *= 4;
@@ -141,21 +148,24 @@ void TopKmers::processSeq(const string &seq, unordered_map<kmer_key_t,unsigned i
 			idx += 3; break;
 		default:
 			idx += 0; // possibly N
+			posN = pos;
 		}
-        if(nThreads > 1) {
-        	if(idx < startIdx || idx > endIdx) {
-        		// k-mer is not within the partition of the thread
-        		continue;
-        	}
-        }
-        if(count.size() > maxMapSize) {
-            if(count.find(idx) == count.end()) {
-                // k-mer shows up after how long!
-            	// ignore it
-                continue;
-            }
-        }
-        count[idx]++;
+		if(startPos > posN) {
+			if(nThreads > 1) {
+				if(idx < startIdx || idx > endIdx) {
+					// k-mer is not within the partition of the thread
+					continue;
+				}
+			}
+			if(count.size() > maxMapSize) {
+				if(count.find(idx) == count.end()) {
+					// k-mer shows up after how long!
+					// ignore it
+					continue;
+				}
+			}
+			count[idx]++;
+		}
     }
 }
 
